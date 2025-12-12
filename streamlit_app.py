@@ -3,7 +3,6 @@ import streamlit as st
 import pandas as pd
 import requests
 from snowflake.snowpark.functions import col
-from snowflake.snowpark.session import get_active_session
 
 # Title
 st.title(":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
