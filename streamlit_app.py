@@ -50,14 +50,40 @@ if time_to_insert:
 # -------------------------------------------------------------
 # 🎯 NEW SECTION: Nutrition info from SmoothieFroot API
 # -------------------------------------------------------------
+# -------------------------------------------------------------
+# 🎯 NEW SECTION: Nutrition info from SmoothieFroot API (FIXED)
+# -------------------------------------------------------------
 st.header("🍉 Nutrition Information for Your Selected Fruits")
+
+# Mapping: Your fruit names → API fruit names
+fruit_api_names = {
+    "Apples": "apple",
+    "Apple": "apple",
+    "Blueberries": "blueberry",
+    "Blueberry": "blueberry",
+    "Strawberries": "strawberry",
+    "Strawberry": "strawberry",
+    "Cantaloupe": "cantaloupe",
+    "Banana": "banana",
+    "Bananas": "banana",
+    "Mango": "mango",
+    "Mangos": "mango",
+    "Pineapple": "pineapple",
+    "Dragon Fruit": "dragonfruit",
+    "Grapes": "grape",
+    "Grape": "grape",
+}
 
 def get_fruit_data(fruit_name):
     """
-    Fetch nutrition data from SmoothieFroot API
+    Fetch nutrition data using corrected API-friendly fruit names
     """
+    api_name = fruit_api_names.get(fruit_name, fruit_name.lower())
+
     try:
-        response = requests.get(f"https://my.smoothiefroot.com/api/fruit/{fruit_name.lower()}")
+        response = requests.get(
+            f"https://my.smoothiefroot.com/api/fruit/{api_name}"
+        )
         if response.status_code == 200:
             return response.json()
         else:
@@ -65,6 +91,7 @@ def get_fruit_data(fruit_name):
     except Exception as e:
         st.error(f"Error retrieving info for {fruit_name}: {e}")
         return None
+
 
 # Show nutrition info for each selected fruit
 if ingredients_list:
@@ -74,7 +101,6 @@ if ingredients_list:
         fruit_data = get_fruit_data(fruit)
 
         if fruit_data:
-            # Convert JSON → DataFrame
             df = pd.DataFrame([fruit_data])
             st.dataframe(df, use_container_width=True)
         else:
