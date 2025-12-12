@@ -57,7 +57,7 @@ def get_fruit_data(fruit_name):
     Fetch nutrition data from SmoothieFroot API
     """
     try:
-        response = requests.get(f"https://my.smoothiefroot.com/api/fruit/" + fruit_chosen)
+        response = requests.get(f"https://my.smoothiefroot.com/api/fruit/{fruit_name.lower()}")
         if response.status_code == 200:
             return response.json()
         else:
