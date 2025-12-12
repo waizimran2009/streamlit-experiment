@@ -13,8 +13,11 @@ st.write("Choose the fruits you want in your custom Smoothie!")
 name_on_order = st.text_input("Name on smoothie:")
 st.write("The name on your smoothie will be:", name_on_order)
 
-# Connect to Snowflake (ONE active session only)
-session = get_active_session()
+
+# Connect to Snowflake
+cnx = st.connection("snowflake")
+session = cnx.session()
+
 
 # Load fruit list from Snowflake
 my_dataframe = session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS").select(
