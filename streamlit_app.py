@@ -16,18 +16,19 @@ st.write("The name on your smoothie will be:", name_on_order)
 cnx = st.connection("snowflake")
 session = cnx.session()
 
-# Load fruit options
+# Load fruit options from Snowflake
 my_dataframe = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"))
-fruit_list = [row["FRUIT_NAME"] for row in my_dataframe.collect()]
 
 # Ingredient picker
 ingredients_list = st.multiselect(
     'Choose up to 5 ingredients:',
-    fruit_list
+    my_dataframe
 )
 
-# Combine selected ingredients
+# Combine selected ingredients into a string
 ingredients_string = "".join(ingredients_list)
+
+# Display the selected ingredients string
 st.write("Selected ingredients string:", ingredients_string)
 
 # Button for submitting order
@@ -47,63 +48,32 @@ if time_to_insert:
         session.sql(my_insert_stmt).collect()
         st.success(f'Your Smoothie is ordered! ✅ {name_on_order}')
 
-# -------------------------------------------------------------
-# 🎯 NEW SECTION: Nutrition info from SmoothieFroot API
-# -------------------------------------------------------------
-# -------------------------------------------------------------
-# 🎯 NEW SECTION: Nutrition info from SmoothieFroot API (FIXED)
-# -------------------------------------------------------------
+
+# -----------------------------
+# NUTRITION INFORMATION SECTION
+# -----------------------------
 st.header("🍉 Nutrition Information for Your Selected Fruits")
 
-# Mapping: Your fruit names → API fruit names
-fruit_api_names = {
-    "Apples": "apple",
-    "Apple": "apple",
-    "Blueberries": "blueberry",
-    "Blueberry": "blueberry",
-    "Strawberries": "strawberry",
-    "Strawberry": "strawberry",
-    "Cantaloupe": "cantaloupe",
-    "Banana": "banana",
-    "Bananas": "banana",
-    "Mango": "mango",
-    "Mangos": "mango",
-    "Pineapple": "pineapple",
-    "Dragon Fruit": "dragonfruit",
-    "Grapes": "grape",
-    "Grape": "grape",
-}
+for fruit in ingredients_list:
 
-def get_fruit_data(fruit_name):
-    """
-    Fetch nutrition data using corrected API-friendly fruit names
-    """
-    api_name = fruit_api_names.get(fruit_name, fruit_name.lower())
+    st.subheader(f"{fruit} Nutrition Information")
 
-    try:
-        response = requests.get(
-            f"https://my.smoothiefroot.com/api/fruit/{api_name}"
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            return None
-    except Exception as e:
-        st.error(f"Error retrieving info for {fruit_name}: {e}")
-        return None
+    # Clean fruit name for API
+    api_fruit_name = fruit.lower().replace(" ", "")
 
+    url = f"https://my.smoothiefroot.com/api/fruit/{api_fruit_name}"
+    response = requests.get(url)
 
-# Show nutrition info for each selected fruit
-if ingredients_list:
-    for fruit in ingredients_list:
-        st.subheader(f"🍎 Nutrition for {fruit}")
+    # If fruit found in Smoothiefroot database
+    if response.status_code == 200 and "family" in response.json():
+        data = response.json()
 
-        fruit_data = get_fruit_data(fruit)
+        df = pd.DataFrame.from_dict(data, orient='index', columns=['value'])
+        st.dataframe(df, use_container_width=True)
 
-        if fruit_data:
-            df = pd.DataFrame([fruit_data])
-            st.dataframe(df, use_container_width=True)
-        else:
-            st.warning(f"No nutrition data found for {fruit}.")
-else:
-    st.info("Select fruits above to see their nutrition info.")
+    else:
+        # Fruit NOT found -> show error table (same as screenshot)
+        error_df = pd.DataFrame({
+            "value": ["Sorry, that fruit is not in our database."]
+        })
+        st.dataframe(error_df, use_container_width=True)
