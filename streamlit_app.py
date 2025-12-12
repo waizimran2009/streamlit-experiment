@@ -1,6 +1,8 @@
 # Import python packages
 import streamlit as st
 from snowflake.snowpark.functions import col
+import requests
+import pandas as pd
 
 # Title
 st.title(":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
@@ -10,22 +12,22 @@ st.write("Choose the fruits you want in your custom Smoothie!")
 name_on_order = st.text_input("Name on smoothie:")
 st.write("The name on your smoothie will be:", name_on_order)
 
-
 # Get Snowflake session
-cnx=st.connection("snowflake")
+cnx = st.connection("snowflake")
 session = cnx.session()
 
 # Load fruit options
 my_dataframe = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"))
+fruit_list = [row["FRUIT_NAME"] for row in my_dataframe.collect()]
 
 # Ingredient picker
 ingredients_list = st.multiselect(
     'Choose up to 5 ingredients:',
-    my_dataframe
+    fruit_list
 )
 
-# Combine selected ingredients into a string
-ingredients_string = "".join(ingredients_list)  # same logic as yours
+# Combine selected ingredients
+ingredients_string = "".join(ingredients_list)
 st.write("Selected ingredients string:", ingredients_string)
 
 # Button for submitting order
@@ -37,23 +39,45 @@ if time_to_insert:
     elif not name_on_order:
         st.warning("Please enter a name for your smoothie!")
     else:
-        # Build SQL statement as a single line
         my_insert_stmt = (
             f"INSERT INTO smoothies.public.orders(ingredients, name_on_order) "
             f"VALUES ('{ingredients_string}', '{name_on_order}')"
         )
 
-        # Execute insert
         session.sql(my_insert_stmt).collect()
-        st.success(f'Your Smoothie is ordered!✅{name_on_order}')
+        st.success(f'Your Smoothie is ordered! ✅ {name_on_order}')
 
-# new section to display smoothiefroot nutrition info 
-import requests
-smoothiefroot_response = requests.get("https://my.smoothiefroot.com/api/fruit/watermelon")
-# st.text(smoothiefroot_response.json())
-sf_df = st.dataframe(data=smoothiefroot_response.json(), use_container_width=True)
+# -------------------------------------------------------------
+# 🎯 NEW SECTION: Nutrition info from SmoothieFroot API
+# -------------------------------------------------------------
+st.header("🍉 Nutrition Information for Your Selected Fruits")
 
+def get_fruit_data(fruit_name):
+    """
+    Fetch nutrition data from SmoothieFroot API
+    """
+    try:
+        response = requests.get(f"https://my.smoothiefroot.com/api/fruit/{fruit_name.lower()}")
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return None
+    except Exception as e:
+        st.error(f"Error retrieving info for {fruit_name}: {e}")
+        return None
 
+# Show nutrition info for each selected fruit
+if ingredients_list:
+    for fruit in ingredients_list:
+        st.subheader(f"🍎 Nutrition for {fruit}")
 
+        fruit_data = get_fruit_data(fruit)
 
-
+        if fruit_data:
+            # Convert JSON → DataFrame
+            df = pd.DataFrame([fruit_data])
+            st.dataframe(df, use_container_width=True)
+        else:
+            st.warning(f"No nutrition data found for {fruit}.")
+else:
+    st.info("Select fruits above to see their nutrition info.")
