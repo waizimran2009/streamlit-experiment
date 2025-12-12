@@ -2,8 +2,8 @@
 import streamlit as st
 import pandas as pd
 import requests
+from snowflake.snowpark.context import get_active_session
 from snowflake.snowpark.functions import col
-from snowflake.snowpark.session import get_active_session
 
 # Title
 st.title(":cup_with_straw: Customize Your Smoothie! :cup_with_straw:")
@@ -13,11 +13,13 @@ st.write("Choose the fruits you want in your custom Smoothie!")
 name_on_order = st.text_input("Name on smoothie:")
 st.write("The name on your smoothie will be:", name_on_order)
 
-# Connect to Snowflake
-session = get_active_session()  # Make sure only ONE session is active
+# Connect to Snowflake (ONE active session only)
+session = get_active_session()
 
 # Load fruit list from Snowflake
-my_dataframe = session.table("smoothies.public.fruit_options").select(col("FRUIT_NAME"), col("SEARCH_ON"))
+my_dataframe = session.table("SMOOTHIES.PUBLIC.FRUIT_OPTIONS").select(
+    col("FRUIT_NAME"), col("SEARCH_ON")
+)
 
 # Convert the Snowpark DataFrame to a Pandas DataFrame
 pd_df = my_dataframe.to_pandas()
@@ -31,15 +33,28 @@ ingredients_list = st.multiselect(
 
 # Show search values and nutrition info
 if ingredients_list:
+    
     st.header("🍉 Nutrition Information for Your Selected Fruits")
     
     for fruit_chosen in ingredients_list:
+
         # Get the SEARCH_ON value from Pandas DataFrame
         search_on = pd_df.loc[pd_df['FRUIT_NAME'] == fruit_chosen, 'SEARCH_ON'].iloc[0]
         st.write(f'The search value for {fruit_chosen} is {search_on}.')
 
-        # Call Fruityvice API
-        fruityvice_response = requests.get(f"https://fruityvice.com/api/fruit/{search_on.lower()}")
+        # Call Fruityvice API safely
+        try:
+            fruityvice_response = requests.get(
+                f"https://fruityvice.com/api/fruit/{search_on.lower().replace(' ', '')}"
+            )
+            fruityvice_json = fruityvice_response.json() if fruityvice_response.status_code == 200 else None
+
+            # Sometimes Fruityvice returns a list instead of a dictionary
+            if isinstance(fruityvice_json, list) and len(fruityvice_json) > 0:
+                fruityvice_json = fruityvice_json[0]
+
+        except:
+            fruityvice_json = None
 
         # ---------------------------------------------------------
         #  LOCAL NUTRITION FALLBACK DATABASE
@@ -67,20 +82,21 @@ if ingredients_list:
                                "carbohydrates": "20.2", "protein": "1.2", "fat": "0.2", "calories": "79"}
         }
 
-        # Process nutrition data
-        fruit_data = None
+        # Normalize key for fallback lookup
+        lookup_key = search_on.lower().replace(" ", "")
 
-        # If API works
-        if fruityvice_response.status_code == 200 and "genus" in fruityvice_response.json():
-            fruit_data = fruityvice_response.json()
-        # If API fails → use local data
-        elif search_on.lower().replace(" ", "") in local_nutrition_data:
-            fruit_data = local_nutrition_data[search_on.lower().replace(" ", "")]
-        
+        # Final fruit data: API → fallback → error
+        if fruityvice_json and "genus" in fruityvice_json:
+            fruit_data = fruityvice_json
+        elif lookup_key in local_nutrition_data:
+            fruit_data = local_nutrition_data[lookup_key]
+        else:
+            fruit_data = None
+
         # Display nutrition table
         if fruit_data:
             df = pd.DataFrame.from_dict(fruit_data, orient='index', columns=['value'])
             st.dataframe(df, use_container_width=True)
         else:
-            df = pd.DataFrame({"value": ["Sorry, that fruit is not in our database."]})
+            df = pd.DataFrame({"value": ["Sorry, that fruit is not in our nutrition database."]})
             st.dataframe(df, use_container_width=True)
